@@ -4,97 +4,93 @@
 // --- System Configuration Constants ---
 const char* const ssid = "WIFI-AE90";
 const char* const password = "below9825candid";
-const int SENSOR_PIN = 34;  // Connect the sensor AOUT pin to ESP32 GPIO 34
-const int PWR = 27;
-const int RELAY_TOGGLE = 13;
+
+// --- Pin Allocations ---
+const int SENSOR_PIN   = 34; // Connect the sensor AOUT pin to ESP32 GPIO 34 (ADC1)
+const int PWR          = 14; // VCC source for duty-cycling the moisture sensor
+const int RELAY_TOGGLE = 13; // Signal line switching your 5V Relay module/LED
+
 NetworkServer server(80);
 
 void setup() {
   Serial.begin(115200);
+  
   pinMode(PWR, OUTPUT);
-  digitalWrite(PWR, HIGH);
-  pinMode(RELAY_TOGGLE, OUTPUT);  // set the LED pin mode
+  digitalWrite(PWR, HIGH);         // Power up sensor sub-system
+  
+  pinMode(RELAY_TOGGLE, OUTPUT);   
+  digitalWrite(RELAY_TOGGLE, LOW); // Start with relay safely disengaged
+  
   pinMode(SENSOR_PIN, INPUT);
   delay(10);
 
-  // We start by connecting to a WiFi network
-
-  //Serial.println();
-  //Serial.println();
-  //Serial.print("Connecting to ");
-  //Serial.println(ssid);
-
   WiFi.begin(ssid, password);
-
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    //Serial.print(".");
   }
-
-  //Serial.println("");
-  //Serial.println("WiFi connected.");
-  //Serial.println("IP address: ");
-  //Serial.println(WiFi.localIP());
 
   server.begin();
 }
 
 void loop() {
-  NetworkClient client = server.accept();  // listen for incoming clients
+  NetworkClient client = server.accept();  // Listen for incoming browser clients
 
-  if (client) {  // if you get a client,
+  if (client) {  
+    String currentLine = "";      
+    String requestString = ""; // Container to safely hold full target headers
+    
+    while (client.connected()) {  
+      if (client.available()) {   
+        char c = client.read();   
+        Serial.write(c);          // Optional: mirror raw stream out to Serial Monitor
+        requestString += c;
 
-    //Serial.println("New Client.");  // print a message out the serial port
-    String currentLine = "";      // make a String to hold incoming data from the client
-    while (client.connected()) {  // loop while the client's connected
-      if (client.available()) {   // if there's bytes to read from the client,
-        char c = client.read();   // read a byte, then
-        Serial.write(c);          // print it out the serial monitor
-        if (c == '\n') {          // if the byte is a newline character
+        if (c == '\n') {          // If the byte is a newline character
 
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
+          // A blank line means the end of the client HTTP request header block:
           if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
+            
+            // --- ACTION BOUNDARY: Process endpoints cleanly after transmission stops ---
+            if (requestString.indexOf("GET /H") >= 0) {
+              // Read raw voltage telemetry from your capacitive sensor
+              int rawValue = analogRead(SENSOR_PIN);
+              
+              Serial.println("\n******************************");
+              Serial.print("[SENSOR] Raw ADC Value: ");
+              Serial.println(rawValue);
+              Serial.println("******************************");
+              
+              digitalWrite(RELAY_TOGGLE, HIGH);  // Turn relay module ON
+            }
+            
+            if (requestString.indexOf("GET /L") >= 0) {
+              digitalWrite(RELAY_TOGGLE, LOW);   // Turn relay module OFF
+              Serial.println("\n[ACTION] Relay forced OFF via /L command.");
+            }
+
+            // Transmit HTTP response headers back to browser
             client.println("HTTP/1.1 200 OK");
             client.println("Content-type:text/html");
+            client.println("Connection: close");
             client.println();
 
-            // the content of the HTTP response follows the header:
-            client.print("Click <a href=\"/H\">here</a> to turn on.<br>");
+            // Render interactive UI links back onto the user device viewport
+            client.print("Click <a href=\"/H\">here</a> to turn on and read sensor.<br>");
             client.print("Click <a href=\"/L\">here</a> to turn off.<br>");
 
-            // The HTTP response ends with another blank line:
             client.println();
-            // break out of the while loop:
-            break;
-          } else {  // if you got a newline, then clear currentLine:
-            currentLine = "";
+            break; // Break out of the processing loops smoothly
+            
+          } else {  
+            currentLine = ""; // Clear line tracker buffer on normal linebreaks
           }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
-        }
-
-        // Check to see if the client request was "GET /H" or "GET /L":
-        if (currentLine.endsWith("GET /H")) {
-          int rawValue = analogRead(SENSOR_PIN);
-          Serial.println("******");
-          Serial.println("******");
-          Serial.print("Raw ADC Value: ");
-          Serial.println(rawValue);
-          Serial.println("******");
-          Serial.println("******");
-          digitalWrite(RELAY_TOGGLE, HIGH);  // GET /H turns the LED on
-          
-        }
-        if (currentLine.endsWith("GET /L")) {
-          digitalWrite(RELAY_TOGGLE, LOW);  // GET /L turns the LED off
+        } else if (c != '\r') {  
+          currentLine += c;      
         }
       }
     }
-    // close the connection:
+    // Safely drop the client channel to clear memory for the next loop cycle
+    delay(10); 
     client.stop();
-    //Serial.println("Client Disconnected.");
   }
 }
