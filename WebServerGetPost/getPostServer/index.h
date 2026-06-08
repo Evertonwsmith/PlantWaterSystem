@@ -1,0 +1,678 @@
+// index.h
+const char index_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- ============================================================
+    META TAGS - Ensure proper rendering and mobile responsiveness
+    ============================================================ -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Water System Controller</title>
+
+    <!-- ============================================================
+    STYLES - Inline CSS for a self-contained, single-file page.
+    Mobile-first responsive design using flexbox and media queries.
+    ============================================================ -->
+    <style>
+        /* ---- Reset & Base Styles ---- */
+        /* Remove default margin/padding, use border-box sizing so
+           padding doesn't increase element width. */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Body: center everything, set a max-width for readability,
+           use a system font stack for performance. */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+        }
+
+        /* Main container: full width but capped on large screens */
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        /* ---- Title ---- */
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin: 20px 0;
+            color: #333;
+        }
+
+        /* ---- Data Boxes (GET data displays) ---- */
+        /* Each box shows a value fetched from the ESP via GET.
+           Arranged in a vertical column on mobile, side-by-side
+           on wider screens. */
+        .data-grid {
+            display: flex;
+            flex-direction: column;   /* stacked on mobile */
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .data-box {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .data-box .label {
+            font-size: 0.85rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .data-box .value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #222;
+        }
+
+        /* ---- Scheduler Section ---- */
+        .scheduler {
+            background: #fff;
+            border-radius: 8px;
+            padding: 18px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .scheduler h2 {
+            font-size: 1.1rem;
+            margin-bottom: 6px;
+            color: #333;
+        }
+
+        .scheduler-desc {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 14px;
+        }
+
+        /* Each scheduler row: label + time input + toggle button */
+        .sched-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .sched-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #444;
+            min-width: 110px;
+        }
+
+        .sched-time {
+            padding: 6px 8px;
+            font-size: 0.95rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .btn-sched-toggle {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #fff;
+            background: #888;
+            transition: background 0.2s, opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-sched-toggle.enabled {
+            background: #c0392b;
+        }
+
+        .btn-sched-toggle:active {
+            opacity: 0.7;
+        }
+
+        .sched-status {
+            font-size: 0.8rem;
+            color: #777;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        /* ---- Button Row (POST command buttons) ---- */
+        /* Group the three command buttons together. */
+        .button-row {
+            display: flex;
+            flex-direction: column;   /* stacked on mobile */
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 14px 0;
+            font-size: 1.05rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #fff;
+            transition: opacity 0.2s;
+        }
+
+        .btn:active {
+            opacity: 0.7;
+        }
+
+        /* Individual button colours to distinguish commands */
+        .btn-cmd1 { background: #2d7d46; }  /* green */
+        .btn-cmd2 { background: #1a73e8; }  /* blue */
+        .btn-cmd3 { background: #e8711a; }  /* orange */
+
+        /* ---- Status / Log area (optional feedback) ---- */
+        .log {
+            background: #fff;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 0.85rem;
+            color: #555;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            min-height: 40px;
+            word-break: break-word;
+        }
+
+        /* ---- Desktop / Tablet adjustments ---- */
+        @media (min-width: 600px) {
+            /* On wider screens, data boxes sit side-by-side */
+            .data-grid {
+                flex-direction: row;
+            }
+            .data-box {
+                flex: 1;  /* each box takes equal width */
+            }
+
+            /* Buttons also go side-by-side */
+            .button-row {
+                flex-direction: row;
+            }
+            .btn {
+                flex: 1;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+    PAGE CONTENT
+    ============================================================ -->
+    <div class="container">
+
+        <!-- ---- Title ---- -->
+        <h1>🌱 Plant Water Controller</h1>
+
+        <!-- ============================================================
+        DATA BOXES (GET requests)
+        Each box displays a value fetched from the ESP8266/ESP32.
+        The "id" is used by JavaScript to update the content.
+        ============================================================ -->
+        <div class="data-grid">
+
+            <!-- Box 1: Temperature -->
+            <!-- Fetched via GET /temperature -->
+            <div class="data-box">
+                <div class="label">Temperature</div>
+                <div class="value" id="temperature">--</div>
+            </div>
+
+            <!-- Box 2: Humidity -->
+            <!-- Fetched via GET /humidity -->
+            <div class="data-box">
+                <div class="label">Humidity</div>
+                <div class="value" id="humidity">--</div>
+            </div>
+
+            <!-- Box 3: Soil Moisture -->
+            <!-- Fetched via GET /moisture -->
+            <div class="data-box">
+                <div class="label">Soil Moisture</div>
+                <div class="value" id="moisture">--</div>
+            </div>
+
+        </div>
+
+        <!-- ============================================================
+        COMMAND BUTTONS (POST requests)
+        Each button sends a POST request to a specific endpoint
+        on the ESP to trigger an action.
+        ============================================================ -->
+        <div class="button-row">
+
+            <!-- Button 1: Water Now -->
+            <!-- POST /water-now  ->  immediately waters the plant -->
+            <button class="btn btn-cmd1" id="btn-water">💧 Water Now</button>
+
+            <!-- Button 2: Pump On -->
+            <!-- POST /pump-on  ->  turns the pump on manually -->
+            <button class="btn btn-cmd2" id="btn-pump-on">🔛 Pump On</button>
+
+            <!-- Button 3: Pump Off -->
+            <!-- POST /pump-off  ->  turns the pump off manually -->
+            <button class="btn btn-cmd3" id="btn-pump-off">🔚 Pump Off</button>
+
+        </div>
+
+        <!-- ============================================================
+        SCHEDULER SECTION
+        Allows the user to set times for automatic POST commands.
+        Each time string is stored in local storage and checked every
+        30 seconds by a scheduler interval.
+        ============================================================ -->
+        <div class="scheduler">
+            <h2>⏰ Scheduler</h2>
+            <p class="scheduler-desc">Set times for automatic commands (24h format HH:MM).</p>
+
+            <!-- Scheduler row 1: Water Now -->
+            <div class="sched-row">
+                <label class="sched-label">💧 Water Now</label>
+                <input type="time" class="sched-time" id="sched-water">
+                <button class="btn-sched-toggle" id="toggle-water">Enable</button>
+            </div>
+
+            <!-- Scheduler row 2: Pump On -->
+            <div class="sched-row">
+                <label class="sched-label">🔛 Pump On</label>
+                <input type="time" class="sched-time" id="sched-pump-on">
+                <button class="btn-sched-toggle" id="toggle-pump-on">Enable</button>
+            </div>
+
+            <!-- Scheduler row 3: Pump Off -->
+            <div class="sched-row">
+                <label class="sched-label">🔚 Pump Off</label>
+                <input type="time" class="sched-time" id="sched-pump-off">
+                <button class="btn-sched-toggle" id="toggle-pump-off">Enable</button>
+            </div>
+
+            <!-- Scheduler status text -->
+            <div class="sched-status" id="sched-status">No scheduled commands.</div>
+        </div>
+
+        <!-- ---- Log area for feedback on actions ---- -->
+        <div class="log" id="log">Ready.</div>
+
+    </div>
+
+    <!-- ============================================================
+    JAVASCRIPT
+    - fetchData():  performs GET requests to update the data boxes
+    - sendCommand(): performs POST requests when a button is clicked
+    - updateUI():   inserts fetched values into the DOM
+    - logMessage(): writes status messages to the log area
+    ============================================================ -->
+    <script>
+        /**
+         * ============================================================
+         * CONFIGURATION
+         * ============================================================
+         * Change this to your ESP's IP address or hostname.
+         * If running the HTML locally on a computer while the ESP is
+         * on the same network, use the ESP's local IP (e.g. 192.168.x.x).
+         * If this HTML is served directly from the ESP, use a relative
+         * path (e.g. "/moisture"), or an empty base URL.
+         * ============================================================ */
+        // const BASE_URL = 'http://192.168.1.100';  // <-- uncomment & set your ESP IP
+        const BASE_URL = '';  // empty = relative path (when served from the ESP)
+
+        // Reference to the log element
+        const logEl = document.getElementById('log');
+
+        /**
+         * ============================================================
+         * HELPER: logMessage(text)
+         * Appends a timestamped message to the log area.
+         * ============================================================ */
+        function logMessage(text) {
+            const now = new Date();
+            const time = now.toLocaleTimeString();
+            logEl.textContent = `[${time}] ${text}`;
+        }
+
+        /**
+         * ============================================================
+         * fetchData()
+         * Performs GET requests to the ESP endpoints and updates
+         * the data boxes with the responses.
+         * 
+         * Endpoints called:
+         *   GET /temperature   -> updates #temperature
+         *   GET /humidity      -> updates #humidity
+         *   GET /moisture      -> updates #moisture
+         * 
+         * Adjust the endpoint paths to match your ESP routes.
+         * ============================================================ */
+        function fetchData() {
+            // ---- GET /temperature ----
+            fetch(BASE_URL + '/temperature')
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(data => {
+                    document.getElementById('temperature').textContent = data;
+                })
+                .catch(err => {
+                    console.error('Temperature GET error:', err);
+                    document.getElementById('temperature').textContent = 'ERR';
+                });
+
+            // ---- GET /humidity ----
+            fetch(BASE_URL + '/humidity')
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(data => {
+                    document.getElementById('humidity').textContent = data;
+                })
+                .catch(err => {
+                    console.error('Humidity GET error:', err);
+                    document.getElementById('humidity').textContent = 'ERR';
+                });
+
+            // ---- GET /moisture ----
+            fetch(BASE_URL + '/moisture')
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(data => {
+                    document.getElementById('moisture').textContent = data;
+                })
+                .catch(err => {
+                    console.error('Moisture GET error:', err);
+                    document.getElementById('moisture').textContent = 'ERR';
+                });
+        }
+
+        /**
+         * ============================================================
+         * sendCommand(endpoint, label)
+         * Sends a POST request to the given endpoint on the ESP.
+         * 
+         * Parameters:
+         *   endpoint  - the URL path (e.g. "/water-now")
+         *   label     - human-readable name for logging
+         * ============================================================ */
+        function sendCommand(endpoint, label) {
+            logMessage(`Sending: ${label}...`);
+
+            fetch(BASE_URL + endpoint, {
+                method: 'POST'
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(data => {
+                    logMessage(`${label} OK — ${data}`);
+                })
+                .catch(err => {
+                    logMessage(`${label} failed: ${err.message}`);
+                    console.error(`POST ${endpoint} error:`, err);
+                });
+        }
+
+        /**
+         * ============================================================
+         * BUTTON EVENT LISTENERS
+         * Wire each button to its corresponding POST endpoint.
+         * ============================================================ */
+
+        // Button: Water Now  ->  POST /water-now
+        document.getElementById('btn-water').addEventListener('click', function() {
+            sendCommand('/water-now', 'Water Now');
+        });
+
+        // Button: Pump On  ->  POST /pump-on
+        document.getElementById('btn-pump-on').addEventListener('click', function() {
+            sendCommand('/pump-on', 'Pump On');
+        });
+
+        // Button: Pump Off  ->  POST /pump-off
+        document.getElementById('btn-pump-off').addEventListener('click', function() {
+            sendCommand('/pump-off', 'Pump Off');
+        });
+
+        /**
+         * ============================================================
+         * AUTO-REFRESH DATA
+         * fetchData() is called immediately on page load, then
+         * every 5 seconds (5000ms) to keep the data boxes up-to-date.
+         * Adjust the interval as needed.
+         * ============================================================ */
+
+        // Initial fetch when the page loads
+        fetchData();
+
+        // Periodic refresh
+        setInterval(fetchData, 5000);
+
+        /**
+         * ============================================================
+         * SCHEDULER
+         * 
+         * Each scheduler row has:
+         *   - an <input type="time"> for setting the time (HH:MM, 24h)
+         *   - a toggle button to enable/disable that scheduled command
+         * 
+         * When enabled, the time is saved to localStorage so it persists
+         * across page reloads. A 30-second interval checks if the current
+         * time matches any enabled scheduled time. If so, the corresponding
+         * POST command is fired.
+         * 
+         * The toggle button text/color reflects the enabled state.
+         * ============================================================ */
+
+        // ---- Scheduler configuration ----
+        // Map each command to its scheduler input ID, toggle button ID,
+        // localStorage key, endpoint, and label (for sendCommand).
+        const SCHEDULES = [
+            {
+                inputId: 'sched-water',
+                toggleId: 'toggle-water',
+                storageKey: 'sched_water',
+                endpoint: '/water-now',
+                label: 'Water Now'
+            },
+            {
+                inputId: 'sched-pump-on',
+                toggleId: 'toggle-pump-on',
+                storageKey: 'sched_pump_on',
+                endpoint: '/pump-on',
+                label: 'Pump On'
+            },
+            {
+                inputId: 'sched-pump-off',
+                toggleId: 'toggle-pump-off',
+                storageKey: 'sched_pump_off',
+                endpoint: '/pump-off',
+                label: 'Pump Off'
+            }
+        ];
+
+        /**
+         * Loads the saved time and enabled state from localStorage
+         * and restores the UI for a given schedule entry.
+         */
+        function loadSchedule(sched) {
+            const inputEl = document.getElementById(sched.inputId);
+            const toggleEl = document.getElementById(sched.toggleId);
+
+            // Load stored data (JSON: { time: "HH:MM", enabled: true/false })
+            const stored = localStorage.getItem(sched.storageKey);
+            if (stored) {
+                try {
+                    const data = JSON.parse(stored);
+                    if (data.time) {
+                        inputEl.value = data.time;
+                    }
+                    if (data.enabled) {
+                        // Set toggle to enabled state
+                        toggleEl.textContent = 'Disable';
+                        toggleEl.classList.add('enabled');
+                    } else {
+                        toggleEl.textContent = 'Enable';
+                        toggleEl.classList.remove('enabled');
+                    }
+                } catch (e) {
+                    // If stored data is corrupt, reset it
+                    localStorage.removeItem(sched.storageKey);
+                }
+            }
+        }
+
+        /**
+         * Saves the current time + enabled state for a schedule entry
+         * to localStorage.
+         */
+        function saveSchedule(sched) {
+            const inputEl = document.getElementById(sched.inputId);
+            const toggleEl = document.getElementById(sched.toggleId);
+            const enabled = toggleEl.classList.contains('enabled');
+            const data = {
+                time: inputEl.value,
+                enabled: enabled
+            };
+            localStorage.setItem(sched.storageKey, JSON.stringify(data));
+        }
+
+        /**
+         * Toggles a schedule entry on/off and saves state.
+         */
+        function toggleSchedule(sched) {
+            const inputEl = document.getElementById(sched.inputId);
+            const toggleEl = document.getElementById(sched.toggleId);
+
+            const currentlyEnabled = toggleEl.classList.contains('enabled');
+
+            if (currentlyEnabled) {
+                // Disable
+                toggleEl.textContent = 'Enable';
+                toggleEl.classList.remove('enabled');
+                logMessage(`Scheduler: ${sched.label} disabled.`);
+            } else {
+                // Enable — require a time to be set
+                if (!inputEl.value) {
+                    logMessage(`Scheduler: Set a time for ${sched.label} first.`);
+                    return;
+                }
+                toggleEl.textContent = 'Disable';
+                toggleEl.classList.add('enabled');
+                logMessage(`Scheduler: ${sched.label} enabled at ${inputEl.value}.`);
+            }
+
+            saveSchedule(sched);
+            updateSchedulerStatus();
+        }
+
+        /**
+         * Updates the status text below the scheduler to show
+         * which commands are scheduled and at what times.
+         */
+        function updateSchedulerStatus() {
+            const statusEl = document.getElementById('sched-status');
+            const active = [];
+
+            SCHEDULES.forEach(sched => {
+                const toggleEl = document.getElementById(sched.toggleId);
+                if (toggleEl.classList.contains('enabled')) {
+                    const inputEl = document.getElementById(sched.inputId);
+                    active.push(`${sched.label} @ ${inputEl.value}`);
+                }
+            });
+
+            if (active.length === 0) {
+                statusEl.textContent = 'No scheduled commands.';
+            } else {
+                statusEl.textContent = 'Active: ' + active.join(' | ');
+            }
+        }
+
+        /**
+         * Checks if any enabled schedule matches the current time
+         * (within a 60-second window to avoid missing the mark).
+         * If a match is found, fires the POST command.
+         */
+        function checkScheduler() {
+            const now = new Date();
+            // Get current time as "HH:MM" string
+            const currentHH = String(now.getHours()).padStart(2, '0');
+            const currentMM = String(now.getMinutes()).padStart(2, '0');
+            const currentTimeStr = `${currentHH}:${currentMM}`;
+
+            SCHEDULES.forEach(sched => {
+                const toggleEl = document.getElementById(sched.toggleId);
+                if (!toggleEl.classList.contains('enabled')) return;
+
+                const inputEl = document.getElementById(sched.inputId);
+                const scheduledTime = inputEl.value;  // "HH:MM" format
+
+                if (scheduledTime === currentTimeStr) {
+                    // Fire the command — but only if we haven't already
+                    // fired it this minute. Use a simple cooldown flag
+                    // stored on the DOM element to prevent double-firing.
+                    const lastFired = toggleEl.dataset.lastFired;
+                    const nowMinute = `${currentHH}:${currentMM}`;
+                    if (lastFired !== nowMinute) {
+                        toggleEl.dataset.lastFired = nowMinute;
+                        logMessage(`⏰ Scheduler triggering: ${sched.label}`);
+                        sendCommand(sched.endpoint, sched.label + ' (scheduled)');
+                    }
+                }
+            });
+        }
+
+        // ---- Wire up scheduler toggle buttons ----
+        SCHEDULES.forEach(sched => {
+            const toggleEl = document.getElementById(sched.toggleId);
+            toggleEl.addEventListener('click', function () {
+                toggleSchedule(sched);
+            });
+        });
+
+        // ---- Load saved scheduler states on page load ----
+        SCHEDULES.forEach(sched => {
+            loadSchedule(sched);
+        });
+        updateSchedulerStatus();
+
+        // ---- Run scheduler check every 30 seconds ----
+        setInterval(checkScheduler, 30000);
+
+        console.log('⏰ Scheduler loaded. Checking every 30s.');
+    </script>
+
+</body>
+</html>
+)rawliteral";
