@@ -4,10 +4,15 @@ Automated local network hosted smart Pea Plant monitoring and watering system
 Directory
 
 A) 1 - starterWebCode
+
 B) 2 - starter+soilRead
+
 C) prototype
+
 D) webPage
+
 E) WebServerGetPost
+
 F) Combined_Prototype_WebServer
 
 A) 1 - starterWebCode
