@@ -73,18 +73,7 @@ void setup() {
     digitalWrite(RELAY_TRIG, HIGH);
     server.send(200, "text/plain", "Watering cycle triggered");
   });
-
-  server.on("/pump-on", HTTP_POST, []() {
-    Serial.println("Action: Pump turned ON manually!");
-    // Add your relay/pump code here
-    server.send(200, "text/plain", "Pump is now ON");
-  });
-
-  server.on("/pump-off", HTTP_POST, []() {
-    Serial.println("Action: Pump turned OFF manually!");
-    // Add your relay/pump code here
-    server.send(200, "text/plain", "Pump is now OFF");
-  });
+  
   server.onNotFound(handleNotFound);
   server.begin();
 }
