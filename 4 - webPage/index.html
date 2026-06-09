@@ -148,15 +148,48 @@
             opacity: 0.7;
         }
 
+        .btn-sched-delete {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #e74c3c;
+            color: #fff;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-sched-delete:active {
+            opacity: 0.7;
+        }
+
+        .btn-add {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #27ae60;
+            color: #fff;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-add:active {
+            opacity: 0.7;
+        }
+
         .sched-status {
             font-size: 0.8rem;
             color: #777;
-            margin-top: 6px;
             font-style: italic;
         }
 
         /* ---- Button Row (POST command buttons) ---- */
-        /* Group the three command buttons together. */
+        /* Group the command buttons together. */
         .button-row {
             display: flex;
             flex-direction: column;   /* stacked on mobile */
@@ -271,14 +304,6 @@
             <!-- POST /water-now  ->  immediately waters the plant -->
             <button class="btn btn-cmd1" id="btn-water">💧 Water Now</button>
 
-            <!-- Button 2: Pump On -->
-            <!-- POST /pump-on  ->  turns the pump on manually -->
-            <button class="btn btn-cmd2" id="btn-pump-on">🔛 Pump On</button>
-
-            <!-- Button 3: Pump Off -->
-            <!-- POST /pump-off  ->  turns the pump off manually -->
-            <button class="btn btn-cmd3" id="btn-pump-off">🔚 Pump Off</button>
-
         </div>
 
         <!-- ============================================================
@@ -288,32 +313,17 @@
         30 seconds by a scheduler interval.
         ============================================================ -->
         <div class="scheduler">
-            <h2>⏰ Scheduler</h2>
-            <p class="scheduler-desc">Set times for automatic commands (24h format HH:MM).</p>
+            <h2>⏰ Water Schedule</h2>
+            <p class="scheduler-desc">Set times for automatic watering (24h format HH:MM).</p>
 
-            <!-- Scheduler row 1: Water Now -->
-            <div class="sched-row">
-                <label class="sched-label">💧 Water Now</label>
-                <input type="time" class="sched-time" id="sched-water">
-                <button class="btn-sched-toggle" id="toggle-water">Enable</button>
+            <!-- Dynamic schedule list injected by JS -->
+            <div id="schedule-list"></div>
+
+            <!-- Add button & status -->
+            <div style="display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap;">
+                <button class="btn-add" id="btn-add-time">➕ Add Time</button>
+                <span class="sched-status" id="sched-status"></span>
             </div>
-
-            <!-- Scheduler row 2: Pump On -->
-            <div class="sched-row">
-                <label class="sched-label">🔛 Pump On</label>
-                <input type="time" class="sched-time" id="sched-pump-on">
-                <button class="btn-sched-toggle" id="toggle-pump-on">Enable</button>
-            </div>
-
-            <!-- Scheduler row 3: Pump Off -->
-            <div class="sched-row">
-                <label class="sched-label">🔚 Pump Off</label>
-                <input type="time" class="sched-time" id="sched-pump-off">
-                <button class="btn-sched-toggle" id="toggle-pump-off">Enable</button>
-            </div>
-
-            <!-- Scheduler status text -->
-            <div class="sched-status" id="sched-status">No scheduled commands.</div>
         </div>
 
         <!-- ---- Log area for feedback on actions ---- -->
@@ -452,16 +462,6 @@
             sendCommand('/water-now', 'Water Now');
         });
 
-        // Button: Pump On  ->  POST /pump-on
-        document.getElementById('btn-pump-on').addEventListener('click', function() {
-            sendCommand('/pump-on', 'Pump On');
-        });
-
-        // Button: Pump Off  ->  POST /pump-off
-        document.getElementById('btn-pump-off').addEventListener('click', function() {
-            sendCommand('/pump-off', 'Pump Off');
-        });
-
         /**
          * ============================================================
          * AUTO-REFRESH DATA
@@ -478,197 +478,174 @@
 
         /**
          * ============================================================
-         * SCHEDULER
+         * SCHEDULER — Dynamic numbered list
          * 
-         * Each scheduler row has:
-         *   - an <input type="time"> for setting the time (HH:MM, 24h)
-         *   - a toggle button to enable/disable that scheduled command
+         * A list of watering times stored as an array. Each entry has:
+         *   - id:      unique number
+         *   - time:    "HH:MM" string
+         *   - enabled: boolean
          * 
-         * When enabled, the time is saved to localStorage so it persists
-         * across page reloads. A 30-second interval checks if the current
-         * time matches any enabled scheduled time. If so, the corresponding
-         * POST command is fired.
-         * 
-         * The toggle button text/color reflects the enabled state.
+         * The list starts with 2 default entries. The user can add or
+         * delete entries. The state is persisted in localStorage.
+         * A 30-second interval checks if any enabled time matches
+         * the current time and fires POST /water-now.
          * ============================================================ */
 
-        // ---- Scheduler configuration ----
-        // Map each command to its scheduler input ID, toggle button ID,
-        // localStorage key, endpoint, and label (for sendCommand).
-        const SCHEDULES = [
-            {
-                inputId: 'sched-water',
-                toggleId: 'toggle-water',
-                storageKey: 'sched_water',
-                endpoint: '/water-now',
-                label: 'Water Now'
-            },
-            {
-                inputId: 'sched-pump-on',
-                toggleId: 'toggle-pump-on',
-                storageKey: 'sched_pump_on',
-                endpoint: '/pump-on',
-                label: 'Pump On'
-            },
-            {
-                inputId: 'sched-pump-off',
-                toggleId: 'toggle-pump-off',
-                storageKey: 'sched_pump_off',
-                endpoint: '/pump-off',
-                label: 'Pump Off'
-            }
-        ];
+        const STORAGE_KEY = 'water_schedule';
 
-        /**
-         * Loads the saved time and enabled state from localStorage
-         * and restores the UI for a given schedule entry.
-         */
-        function loadSchedule(sched) {
-            const inputEl = document.getElementById(sched.inputId);
-            const toggleEl = document.getElementById(sched.toggleId);
+        /** Array of { id, time, enabled } */
+        let schedule = [];
 
-            // Load stored data (JSON: { time: "HH:MM", enabled: true/false })
-            const stored = localStorage.getItem(sched.storageKey);
+        let nextId = 1;
+
+        /** Load schedule from localStorage or create defaults. */
+        function loadSchedule() {
+            const stored = localStorage.getItem(STORAGE_KEY);
             if (stored) {
                 try {
-                    const data = JSON.parse(stored);
-                    if (data.time) {
-                        inputEl.value = data.time;
-                    }
-                    if (data.enabled) {
-                        // Set toggle to enabled state
-                        toggleEl.textContent = 'Disable';
-                        toggleEl.classList.add('enabled');
-                    } else {
-                        toggleEl.textContent = 'Enable';
-                        toggleEl.classList.remove('enabled');
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        schedule = parsed;
+                        // Recompute nextId
+                        nextId = Math.max(...schedule.map(e => e.id), 0) + 1;
+                        renderSchedule();
+                        updateSchedulerStatus();
+                        return;
                     }
                 } catch (e) {
-                    // If stored data is corrupt, reset it
-                    localStorage.removeItem(sched.storageKey);
+                    // corrupt data, reset
                 }
             }
-        }
-
-        /**
-         * Saves the current time + enabled state for a schedule entry
-         * to localStorage.
-         */
-        function saveSchedule(sched) {
-            const inputEl = document.getElementById(sched.inputId);
-            const toggleEl = document.getElementById(sched.toggleId);
-            const enabled = toggleEl.classList.contains('enabled');
-            const data = {
-                time: inputEl.value,
-                enabled: enabled
-            };
-            localStorage.setItem(sched.storageKey, JSON.stringify(data));
-        }
-
-        /**
-         * Toggles a schedule entry on/off and saves state.
-         */
-        function toggleSchedule(sched) {
-            const inputEl = document.getElementById(sched.inputId);
-            const toggleEl = document.getElementById(sched.toggleId);
-
-            const currentlyEnabled = toggleEl.classList.contains('enabled');
-
-            if (currentlyEnabled) {
-                // Disable
-                toggleEl.textContent = 'Enable';
-                toggleEl.classList.remove('enabled');
-                logMessage(`Scheduler: ${sched.label} disabled.`);
-            } else {
-                // Enable — require a time to be set
-                if (!inputEl.value) {
-                    logMessage(`Scheduler: Set a time for ${sched.label} first.`);
-                    return;
-                }
-                toggleEl.textContent = 'Disable';
-                toggleEl.classList.add('enabled');
-                logMessage(`Scheduler: ${sched.label} enabled at ${inputEl.value}.`);
-            }
-
-            saveSchedule(sched);
+            // Default: 2 entries
+            schedule = [
+                { id: nextId++, time: '08:00', enabled: false },
+                { id: nextId++, time: '20:00', enabled: false }
+            ];
+            saveSchedule();
+            renderSchedule();
             updateSchedulerStatus();
         }
 
-        /**
-         * Updates the status text below the scheduler to show
-         * which commands are scheduled and at what times.
-         */
+        /** Persist schedule to localStorage. */
+        function saveSchedule() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
+        }
+
+        /** Render the schedule list into the DOM. */
+        function renderSchedule() {
+            const container = document.getElementById('schedule-list');
+            container.innerHTML = '';
+
+            schedule.forEach((entry, index) => {
+                const row = document.createElement('div');
+                row.className = 'sched-row';
+                row.dataset.id = entry.id;
+
+                // Number label
+                const label = document.createElement('span');
+                label.className = 'sched-label';
+                label.textContent = `#${index + 1}`;
+
+                // Time input
+                const timeInput = document.createElement('input');
+                timeInput.type = 'time';
+                timeInput.className = 'sched-time';
+                timeInput.value = entry.time;
+                timeInput.addEventListener('change', function () {
+                    entry.time = this.value;
+                    saveSchedule();
+                    updateSchedulerStatus();
+                });
+
+                // Toggle button
+                const toggle = document.createElement('button');
+                toggle.className = 'btn-sched-toggle' + (entry.enabled ? ' enabled' : '');
+                toggle.textContent = entry.enabled ? 'Disable' : 'Enable';
+                toggle.addEventListener('click', function () {
+                    entry.enabled = !entry.enabled;
+                    this.textContent = entry.enabled ? 'Disable' : 'Enable';
+                    this.classList.toggle('enabled', entry.enabled);
+                    saveSchedule();
+                    updateSchedulerStatus();
+                    logMessage(`Schedule #${index + 1} ${entry.enabled ? 'enabled' : 'disabled'}.`);
+                });
+
+                // Delete button
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn-sched-delete';
+                delBtn.textContent = '✕';
+                delBtn.addEventListener('click', function () {
+                    if (schedule.length <= 1) {
+                        logMessage('Cannot delete the last time slot.');
+                        return;
+                    }
+                    const idx = schedule.findIndex(e => e.id === entry.id);
+                    if (idx > -1) {
+                        schedule.splice(idx, 1);
+                        saveSchedule();
+                        renderSchedule();
+                        updateSchedulerStatus();
+                        logMessage(`Schedule slot #${index + 1} deleted.`);
+                    }
+                });
+
+                row.appendChild(label);
+                row.appendChild(timeInput);
+                row.appendChild(toggle);
+                row.appendChild(delBtn);
+                container.appendChild(row);
+            });
+        }
+
+        /** Update status text showing active times. */
         function updateSchedulerStatus() {
             const statusEl = document.getElementById('sched-status');
-            const active = [];
-
-            SCHEDULES.forEach(sched => {
-                const toggleEl = document.getElementById(sched.toggleId);
-                if (toggleEl.classList.contains('enabled')) {
-                    const inputEl = document.getElementById(sched.inputId);
-                    active.push(`${sched.label} @ ${inputEl.value}`);
-                }
-            });
-
+            const active = schedule.filter(e => e.enabled && e.time);
             if (active.length === 0) {
-                statusEl.textContent = 'No scheduled commands.';
+                statusEl.textContent = 'No active watering times.';
             } else {
-                statusEl.textContent = 'Active: ' + active.join(' | ');
+                const parts = active.map(e => `#${schedule.indexOf(e) + 1} @ ${e.time}`);
+                statusEl.textContent = 'Active: ' + parts.join(' | ');
             }
         }
 
-        /**
-         * Checks if any enabled schedule matches the current time
-         * (within a 60-second window to avoid missing the mark).
-         * If a match is found, fires the POST command.
-         */
+        /** Add a new empty time slot. */
+        function addTimeSlot() {
+            schedule.push({ id: nextId++, time: '12:00', enabled: false });
+            saveSchedule();
+            renderSchedule();
+            updateSchedulerStatus();
+            logMessage('New time slot added.');
+        }
+
+        /** Check if any enabled schedule matches the current minute. */
         function checkScheduler() {
             const now = new Date();
-            // Get current time as "HH:MM" string
             const currentHH = String(now.getHours()).padStart(2, '0');
             const currentMM = String(now.getMinutes()).padStart(2, '0');
             const currentTimeStr = `${currentHH}:${currentMM}`;
 
-            SCHEDULES.forEach(sched => {
-                const toggleEl = document.getElementById(sched.toggleId);
-                if (!toggleEl.classList.contains('enabled')) return;
-
-                const inputEl = document.getElementById(sched.inputId);
-                const scheduledTime = inputEl.value;  // "HH:MM" format
-
-                if (scheduledTime === currentTimeStr) {
-                    // Fire the command — but only if we haven't already
-                    // fired it this minute. Use a simple cooldown flag
-                    // stored on the DOM element to prevent double-firing.
-                    const lastFired = toggleEl.dataset.lastFired;
-                    const nowMinute = `${currentHH}:${currentMM}`;
-                    if (lastFired !== nowMinute) {
-                        toggleEl.dataset.lastFired = nowMinute;
-                        logMessage(`⏰ Scheduler triggering: ${sched.label}`);
-                        sendCommand(sched.endpoint, sched.label + ' (scheduled)');
+            schedule.forEach(entry => {
+                if (!entry.enabled || !entry.time) return;
+                if (entry.time === currentTimeStr) {
+                    // Cooldown flag to prevent double-fire
+                    if (entry._lastFired !== currentTimeStr) {
+                        entry._lastFired = currentTimeStr;
+                        const idx = schedule.indexOf(entry);
+                        logMessage(`⏰ Schedule #${idx + 1} triggering: Water Now`);
+                        sendCommand('/water-now', `Schedule #${idx + 1} (Water Now)`);
                     }
                 }
             });
         }
 
-        // ---- Wire up scheduler toggle buttons ----
-        SCHEDULES.forEach(sched => {
-            const toggleEl = document.getElementById(sched.toggleId);
-            toggleEl.addEventListener('click', function () {
-                toggleSchedule(sched);
-            });
-        });
+        // ---- Wire up "Add Time" button ----
+        document.getElementById('btn-add-time').addEventListener('click', addTimeSlot);
 
-        // ---- Load saved scheduler states on page load ----
-        SCHEDULES.forEach(sched => {
-            loadSchedule(sched);
-        });
-        updateSchedulerStatus();
-
-        // ---- Run scheduler check every 30 seconds ----
+        // ---- Load schedule and start checking ----
+        loadSchedule();
         setInterval(checkScheduler, 30000);
-
-        console.log('⏰ Scheduler loaded. Checking every 30s.');
+        console.log('⏰ Dynamic scheduler loaded. Checking every 30s.');
     </script>
 
 </body>
